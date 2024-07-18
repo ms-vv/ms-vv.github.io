@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<search> 
+  
+  
+    
+    <entry>
+      <title>a1</title>
+      <link href="/blog/a1/"/>
+      <url>/blog/a1/</url>
+      
+        <content type="html"><![CDATA[]]></content>
+      
+      
+      
+    </entry>
+    
+    
+    
+    <entry>
+      <title>test</title>
+      <link href="/blog/test/"/>
+      <url>/blog/test/</url>
+      
+        <content type="html"><![CDATA[<h2 id="a"><a href="#a" class="headerlink" title="a"></a>a</h2><h3 id="a-1"><a href="#a-1" class="headerlink" title="a"></a>a</h3><h3 id="c"><a href="#c" class="headerlink" title="c"></a>c</h3><hr>]]></content>
+      
+      
+      
+    </entry>
+    
+    
+  
+  
+</search>
