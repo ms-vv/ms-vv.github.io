@@ -4,6 +4,19 @@
   
     
     <entry>
+      <title>sql注入点检测</title>
+      <link href="/blog/sql%E6%B3%A8%E5%85%A5%E7%82%B9%E6%A3%80%E6%B5%8B/"/>
+      <url>/blog/sql%E6%B3%A8%E5%85%A5%E7%82%B9%E6%A3%80%E6%B5%8B/</url>
+      
+        <content type="html"><![CDATA[<hr><h1 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h1><p>挖掘SQL注入漏洞的第一步，就是发现SQL注入漏洞，只有发现了注入点才能够继续深入利用。</p><p>可以通过多种方式来检测是否存在注入，最简单的就是直接在参数后面加上<mark style="background: #FFB8EBA6;">‘</mark> 或者<mark style="background: #D2B3FFA6;">“</mark>等特殊字符让web应用程序抛出异常；但这种情况已经很少见了，比较好的方法是通过盲注来进行判断；</p><h1 id="注入点位置"><a href="#注入点位置" class="headerlink" title="注入点位置"></a>注入点位置</h1><p>所有和数据库有交互的地方均可能存在SQL注入，因此我们在分析数据包的时候， 可以关注一下哪些数据可能会和数据库交互，从而进行测试是否存在SQL注入漏洞。</p><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">POST /?<span class="built_in">id</span>=homePage* HTTP/<span class="number">1.1</span></span><br><span class="line">Host: www.netspi.com*</span><br><span class="line">Connection: close</span><br><span class="line">Cache-Control: <span class="built_in">max</span>-age=<span class="number">0</span></span><br><span class="line">User-Agent: Mozilla/<span class="number">5.0</span> (Windows NT <span class="number">10.0</span>; Win64; x64) AppleWebKit/<span class="number">537.36</span> (KHTML, like Gecko) Chrome/<span class="number">62.0</span><span class="number">.3202</span><span class="number">.94</span> Safari/<span class="number">537.36</span>*</span><br><span class="line">Upgrade-Insecure-Requests: <span class="number">1</span></span><br><span class="line">Accept: text/html,application/xhtml+xml,application/xml;q=<span class="number">0.9</span>,image/webp,image/apng,*/*;q=<span class="number">0.8</span></span><br><span class="line">Accept-Encoding: gzip, deflate</span><br><span class="line">Accept-Language: en-US,en;q=<span class="number">0.9</span></span><br><span class="line">X-Server-Name: PROD*</span><br><span class="line">Cookie: user=harold;*</span><br><span class="line">Content-<span class="type">Type</span>: application/x-www-form-urlencoded</span><br><span class="line"></span><br><span class="line">username=harold*&amp;email=harold@netspi.com*</span><br></pre></td></tr></table></figure><blockquote><p>如果传输的是json格式的数据，在使用双引号闭合时，记得使用\来防止破坏json数据结构，如下，其他特殊结构数据类似<br>{“username”:”test&quot;“}</p></blockquote><h1 id="注入检测"><a href="#注入检测" class="headerlink" title="注入检测"></a>注入检测</h1><p>检测是否存在注入一般通过两种方式来判断：</p><ol><li>输入特殊字符是否抛出相关异常</li><li>输入一些语句运行是否达到我们预期的结果（返回内容、响应时间等）</li></ol><table><thead><tr><th>类型</th><th>语句和结果</th></tr></thead><tbody><tr><td>特殊字符</td><td>id&#x3D;’)”)</td></tr><tr><td>逻辑算数测试</td><td>id&#x3D;’ and 2*3&#x3D;6 – true<br>id&#x3D;’ and 2*3&#x3D;5 – false<br>id&#x3D;2*3 是否返回id&#x3D;6内容<br>id&#x3D;1&#x2F;1 true<br>id&#x3D;1&#x2F;0 false</td></tr><tr><td>返回延时</td><td>id&#x3D; ‘ and sleep(5) 延迟5秒或更久</td></tr></tbody></table><hr>]]></content>
+      
+      
+      
+    </entry>
+    
+    
+    
+    <entry>
       <title>sql注入</title>
       <link href="/blog/sql%E6%B3%A8%E5%85%A5/"/>
       <url>/blog/sql%E6%B3%A8%E5%85%A5/</url>
